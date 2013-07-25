@@ -21,7 +21,7 @@ module.exports = (model, options) ->
       @headers = data.headers
       @remoteAddress = data.remoteAddress
       @authentication = data.authentication
-      
+
       # This is a map from docName -> listener function
       @listeners = {}
 
@@ -74,7 +74,7 @@ module.exports = (model, options) ->
     getSnapshot: (docName, callback) ->
       @doAuth {docName}, 'get snapshot', callback, ->
         model.getSnapshot docName, callback
-    
+
     create: (docName, type, meta, callback) ->
       # We don't check that types[type.name] == type. That might be important at some point.
       type = types[type] if typeof type == 'string'
@@ -108,7 +108,11 @@ module.exports = (model, options) ->
     delete: (docName, callback) ->
       @doAuth {docName}, 'delete', callback, =>
         model.delete docName, callback
-    
+
+    updateMeta: (docName, meta, callback) ->
+      @doAuth {docName}, 'submit meta', callback, =>
+        model.updateMeta docName, meta, @sessionId, callback
+
     # Open the named document for reading. Just like model.listen, version is optional.
     listen: (docName, version, listener, callback) ->
       authOps = if version?

@@ -181,7 +181,7 @@ module.exports = Model = (db, options) ->
         # The callback is called with the version of the document at which the op was applied.
         # This is the op.v after transformation, and its doc.v - 1.
         callback null, opData.v
-    
+
         # I need a decent strategy here for deciding whether or not to save the snapshot.
         #
         # The 'right' strategy looks something like "Store the snapshot whenever the snapshot
@@ -229,13 +229,13 @@ module.exports = Model = (db, options) ->
 
       doc.eventEmitter.setMaxListeners 0
       doc.opQueue = makeOpQueue docName, doc
-      
+
       refreshReapingTimeout docName
       model.emit 'add', docName, data
       callback null, doc for callback in callbacks if callbacks
 
     doc
-  
+
   # This is a little helper wrapper around db.getOps. It does two things:
   #
   # - If there's no database set, it returns an error to the callback
@@ -410,7 +410,7 @@ module.exports = Model = (db, options) ->
 
   # Perminantly deletes the specified document.
   # If listeners are attached, they are removed.
-  # 
+  #
   # The callback is called with (error) if there was an error. If error is null / undefined, the
   # document was deleted.
   #
@@ -431,6 +431,31 @@ module.exports = Model = (db, options) ->
       db.delete docName, doc?.dbMeta, done
     else
       done (if !doc then 'Document does not exist')
+
+  @updateMeta = (docName, meta, source, callback) ->
+    doc = docs[docName]
+    if doc
+      existingMeta = doc.meta or {}
+      for key, val of meta
+        existingMeta[key] = val
+      doc.meta = existingMeta
+
+      metaOp =
+        type: 'meta'
+        snapshotMeta: meta
+        meta: {source: source}
+      if db.updateMeta?
+        db.updateMeta docName, doc.meta, (error) ->
+          if error?
+            callback? error
+          else
+            doc.eventEmitter.emit 'meta', metaOp
+            callback? null, doc.meta
+      else
+        doc.eventEmitter.emit 'meta', metaOp
+        callback?()
+    else
+      callback?()
 
   # This gets all operations from [start...end]. (That is, its not inclusive.)
   #
@@ -494,7 +519,7 @@ module.exports = Model = (db, options) ->
   # Apply an op to the specified document.
   # The callback is passed (error, applied version #)
   # opData = {op:op, v:v, meta:metadata}
-  # 
+  #
   # Ops are queued before being applied so that the following code applies op C before op B:
   # model.applyOp 'doc', OPA, -> model.applyOp 'doc', OPB
   # model.applyOp 'doc', OPC
@@ -511,7 +536,7 @@ module.exports = Model = (db, options) ->
   # TODO: op and meta should be combineable in the op that gets sent
   @applyMetaOp = (docName, metaOpData, callback) ->
     {path, value} = metaOpData.meta
-   
+
     return callback? "path should be an array" unless isArray path
 
     load docName, (error, doc) ->
@@ -532,7 +557,7 @@ module.exports = Model = (db, options) ->
   #
   # The callback is called once the listener is attached, but before any ops have been passed
   # to the listener.
-  # 
+  #
   # This will _not_ edit the document metadata.
   #
   # If there are any listeners, we don't purge the document from the cache. But be aware, this behaviour
@@ -569,6 +594,8 @@ module.exports = Model = (db, options) ->
         doc.eventEmitter.on 'op', listener
         callback? null, doc.v
 
+      doc.eventEmitter.on 'meta', listener
+
   # Remove a listener for a particular document.
   #
   # removeListener(docName, listener)
@@ -581,6 +608,7 @@ module.exports = Model = (db, options) ->
     return unless doc = docs[docName]
 
     doc.eventEmitter.removeListener 'op', listener
+    doc.eventEmitter.removeListener 'meta', listener
     refreshReapingTimeout docName
 
   # Flush saves all snapshot data to the database. I'm not sure whether or not this is actually needed -

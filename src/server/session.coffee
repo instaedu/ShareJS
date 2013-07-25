@@ -63,7 +63,6 @@ exports.handler = (session, createAgent) ->
 
     # We'll only handle one message from each client at a time.
     handleMessage = (query) ->
-
       error = null
       error = 'Invalid docName' unless query.doc is null or typeof query.doc is 'string' or (query.doc is undefined and lastReceivedDoc)
       error = "'create' must be true or missing" unless query.create in [true, undefined]
@@ -109,6 +108,8 @@ exports.handler = (session, createAgent) ->
                  # The socket is submitting an op.
         else if query.op? or query.meta?.path?
           handleOp query, callback
+        else if query.snapshotMeta?
+          handleMeta query, callback
 
         else
           console.warn "Invalid query #{JSON.stringify query} from #{agent.sessionId}"
@@ -129,7 +130,7 @@ exports.handler = (session, createAgent) ->
       else
         lastSentDoc = response.doc
 
-      
+
       # Its invalid to send a message to a closed session. We'll silently drop messages if the
       # session has closed.
       if session.ready()
@@ -148,15 +149,21 @@ exports.handler = (session, createAgent) ->
         throw new Error 'Consistency violation - doc listener invalid' unless docState[docName].listener == listener
 
         #p "listener doc:#{docName} opdata:#{i opData} v:#{version}"
-
         # Skip the op if this socket sent it.
         return if opData.meta.source is agent.sessionId
 
-        opMsg =
-          doc: docName
-          op: opData.op
-          v: opData.v
-          meta: opData.meta
+        if opData.type == 'meta'
+          opMsg =
+            doc: docName
+            type: 'meta'
+            snapshotMeta: opData.snapshotMeta
+        else
+          opMsg =
+            doc: docName
+            type: 'op'
+            op: opData.op
+            v: opData.v
+            meta: opData.meta
 
         send opMsg
 
@@ -248,6 +255,7 @@ exports.handler = (session, createAgent) ->
           msg.v = docData.v
           msg.type = docData.type.name unless query.type == docData.type.name
           msg.snapshot = docData.snapshot
+          msg.meta = docData.meta
         else
           return callback 'Document does not exist'
 
@@ -311,12 +319,17 @@ exports.handler = (session, createAgent) ->
         send msg
         callback()
 
+    handleMeta = (query, callback) ->
+      agent.updateMeta query.doc, query.snapshotMeta, (error) ->
+        if !error?
+          callback()
+
     # Authentication process has failed, send error and stop session
     failAuthentication = (error) ->
       session.send
         auth: null
         error: error
-      
+
       session.stop()
 
     # Wait for client to send an auth message, but don't wait forever

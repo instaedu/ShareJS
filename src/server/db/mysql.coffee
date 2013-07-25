@@ -60,13 +60,13 @@ module.exports = MysqlDb = (options) ->
 
     sql =  """
       CREATE TABLE #{snapshot_table} (
-        doc varchar(256) NOT NULL,
+        doc TEXT NOT NULL,
         v int NOT NULL,
-        type varchar(256) NOT NULL,
+        type TEXT NOT NULL,
         snapshot text NOT NULL,
         meta text NOT NULL,
         created_at timestamp NOT NULL,
-        CONSTRAINT snapshots_pkey PRIMARY KEY (doc, v)
+        CONSTRAINT snapshots_pkey PRIMARY KEY (doc(255), v)
       );
     """
     client.query sql, (error, result) ->
@@ -74,11 +74,11 @@ module.exports = MysqlDb = (options) ->
 
     sql = """
       CREATE TABLE #{operations_table} (
-        doc varchar(256) NOT NULL,
+        doc TEXT NOT NULL,
         v int NOT NULL,
         op text NOT NULL,
         meta text NOT NULL,
-        CONSTRAINT operations_pkey PRIMARY KEY (doc, v)
+        CONSTRAINT operations_pkey PRIMARY KEY (doc(255), v)
       );
     """
     client.query sql, (error, result) ->
@@ -165,6 +165,18 @@ module.exports = MysqlDb = (options) ->
       snapshot: JSON.stringify(docData.snapshot)
       meta:     JSON.stringify(docData.meta)
     client.query sql, [values, docName], (error, result) ->
+      if !error?
+        callback?()
+      else
+        callback? error?.message
+
+  @updateMeta = (docName, meta, callback) ->
+    sql = """
+      UPDATE #{snapshot_table}
+      SET meta = ?
+      WHERE doc = ?
+    """
+    client.query sql, [JSON.stringify(meta), docName], (error, result) ->
       if !error?
         callback?()
       else

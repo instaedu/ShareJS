@@ -2,8 +2,15 @@
 
 require('coffee-script');
 
+var fs = require('fs');
+var args = process.argv.splice(2);
+if (args.length == 0) {
+    throw new Error('You must pass an options.js file');
+}
+
+var options = require(fs.realpathSync(args[0]));
+
 var createdb = require('../src/server/db');
-var options = require('./options');
 console.log(options);
 if (options.db.type !== 'mysql') {
   throw new Error('You must configure your server to use mysql before using this script');
