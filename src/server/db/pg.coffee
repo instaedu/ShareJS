@@ -155,6 +155,18 @@ module.exports = PgDb = (options) ->
       else
         callback? error?.message
 
+  @updateMeta = (docName, meta, callback) ->
+    sql = """
+      UPDATE #{snapshot_table}
+      SET "meta" = $1
+      WHERE "doc" = $2
+    """
+    client.query sql, [JSON.stringify(meta), docName], (error, result) ->
+      if !error?
+        callback?()
+      else
+        callback? error?.message
+
   @getOps = (docName, start, end, callback) ->
     end = if end? then end - 1 else 2147483647
     sql = """
